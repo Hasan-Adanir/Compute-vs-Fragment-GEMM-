@@ -39,6 +39,10 @@ typedef struct {
 Mat  mat_alloc(int rows, int cols);
 void mat_free(Mat *m);
 
+/* Matrisin sol ust kosesinden en fazla max x max hucre basar; matris daha
+ * buyukse kesildigini "..." ile belirtir. --print bayragi bunu kullanir. */
+void mat_print(const char *name, const Mat *m, int max);
+
 /* Deterministik PRNG: rand() platformdan platforma degistigi icin Mac'te ve
  * Windows'ta ayni matrisleri uretebilmek adina kendi uretecimizi tasiyoruz. */
 void mat_fill_random(Mat *m, unsigned int seed);

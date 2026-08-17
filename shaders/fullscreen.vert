@@ -1,13 +1,18 @@
-#version 410 core
+#version 120
+/* GLES 2.0'da bu satir "#version 100" olur; GLSL 1.20 ayni sozdizimini
+ * (attribute / varying / gl_FragColor / texture2D) masaustunde de kabul
+ * ettigi icin tek dosyayla idare ediyoruz. */
 
-/* Vertex buffer yok. gl_VertexID'den tum ekrani kaplayan tek bir ucgen
- * uretiyoruz: (-1,-1), (3,-1), (-1,3). Ucgen viewport'tan tasar, tasan kisim
- * kirpilir; iki ucgenli quad'a gore kose boyunca tekrar eden fragment olmaz.
+/* GLES 2.0'da gl_VertexID yok: tam ekran ucgenin uc kosesi VBO'dan attribute
+ * olarak geliyor. VBO ve attribute durumu My_glInit() icinde bir kez
+ * kuruluyor -- VAO da olmadigi icin o durum global ve kalici.
  *
- * Buradaki tek is, hedef dokunun her texel'i icin bir fragment uretmek.
- * Asil hesap fragment shader'da. */
+ * Buradaki tek is, hedefin her texel'i icin bir fragment uretmek: yani
+ * compute'un invocation'larini dogurmak. Asil hesap fragment shader'da. */
+
+attribute vec2 aPos;
+
 void main()
 {
-    vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
-    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+    gl_Position = vec4(aPos, 0.0, 1.0);
 }

@@ -1,58 +1,44 @@
-/* ===========================================================================
- * frag_naive -- C = A * B'yi FRAGMENT SHADER ile hesaplar.
- *
- * Fikir: matrisleri dokuya koy, N x N'lik bir framebuffer'a tam ekran ucgen
- * ciz. Rasterizer her hedef texel icin bir fragment uretir; her fragment kendi
- * (i, j) hucresinin ic carpimini hesaplar. Ekrana hicbir sey cizilmez, sonuc
- * framebuffer'dan geri okunur.
- *
- * Esleme:
- *   rasterizer -> is dagitici      fragment -> thread
- *   doku       -> read-only buffer FBO      -> cikti buffer'i
- * ===========================================================================*/
+/* 
+  frag -- C = A * B'yi FRAGMENT SHADER ile hesaplar.
+    comp.c                             frag.c
+    ------                             ------
+    glGenBuffers + glBufferData        My_glCreateBuffer
+    glBindBufferBase                   My_glBindBufferBase
+    gl_program_compute("gemm.comp")    My_glCreateComputeProgram("gemm.frag")
+    layout(local_size_x = 16, ...)     My_glProgramLocalSize(16, 16)
+    glDispatchCompute(gx, gy, 1)       My_glDispatchCompute(gx, gy, 1)
+    glMemoryBarrier(...)               My_glMemoryBarrier(...)
+    glGetBufferSubData(...)            My_glGetBufferSubData(...)
+ 
+ 
+  SSBO yerine texture, dispatch
+  yerine tam ekran ucgen, cikti yerine FBO.
+ */
 
-#include "common.h"
+#include "mygl.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-/* Matrisi tek kanalli 32-bit float dokuya yukler.
- * texel(x, y) = m->data[y * cols + x] olur. */
-static GLuint upload_matrix(const Mat *m)
-{
-    GLuint tex;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-
-    /* texelFetch filtreleme yapmaz ama eksik mipmap zinciri dokuyu "incomplete"
-     * gosterebilir; NEAREST + CLAMP bunu bastan engeller. */
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, m->cols, m->rows, 0,
-                 GL_RED, GL_FLOAT, m->data);
-    return tex;
-}
-
 int main(int argc, char **argv)
 {
-    int  N       = 512;
-    bool verify  = true;
+    int  N      = 512;
+    bool verify = true;
+    bool show   = false;
     for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "--noverify") == 0) verify = false;   /* buyuk N icin */
-        else { int v = atoi(argv[i]); if (v >= 16) N = v; }
+        if      (strcmp(argv[i], "--noverify") == 0) verify = false;
+        else if (strcmp(argv[i], "--print")    == 0) show   = true;   /* matrisleri bas */
+        else { int v = atoi(argv[i]); if (v >= 2) N = v; }
     }
 
     if (!gl_init()) return 1;
 
-    printf("\n=== frag_naive (fragment shader GEMM) ===\n");
+    printf("\n=== frag (fragment shader GEMM) ===\n");
     gl_print_info();
     printf("N        : %d  (%d x %d matrisler)\n\n", N, N, N);
 
-    /* ---------------------------------------------------------- Matrisleri doldurma ----*/
+    /* ---------------------------------------------------------- veri ----*/
     Mat A = mat_alloc(N, N);
     Mat B = mat_alloc(N, N);
     Mat C_gpu = mat_alloc(N, N);
@@ -61,64 +47,43 @@ int main(int argc, char **argv)
 
     /* ------------------------------------------------- CPU temel cizgi ----*/
     double t0 = mm_now_ms();
-    mat_mul_cpu(&A, &B, &C_gpu);        /* tamponu gecici olarak kullaniyoruz */
+    mat_mul_cpu(&A, &B, &C_gpu);
     double cpu_ms = mm_now_ms() - t0;
     printf("CPU (blocked fp32) : %8.2f ms   %7.2f GFLOP/s\n",
            cpu_ms, mm_gflops(N, cpu_ms));
 
     /* ------------------------------------------------------- GL kaynak ----*/
-    GLuint texA = upload_matrix(&A);
-    GLuint texB = upload_matrix(&B);
+    My_glInit();   /* tam ekran ucgenin VBO'su; compute yolunda karsiligi yok */
 
-    /* Cikti: N x N, tek kanalli float doku; FBO'ya renk eki olarak baglanir. */
-    GLuint texC;
-    glGenTextures(1, &texC);
-    glBindTexture(GL_TEXTURE_2D, texC);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, N, N, 0, GL_RED, GL_FLOAT, NULL);
+    MyBuffer bufA = My_glCreateBuffer(N, N, A.data);
+    MyBuffer bufB = My_glCreateBuffer(N, N, B.data);
+    MyBuffer bufC = My_glCreateBuffer(N, N, NULL);
+    My_glBindBufferBase(0, &bufA);
+    My_glBindBufferBase(1, &bufB);
+    My_glBindBufferBase(2, &bufC);
 
-    GLuint fbo;
-    glGenFramebuffers(1, &fbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                           GL_TEXTURE_2D, texC, 0);
-    GLenum draw_buf = GL_COLOR_ATTACHMENT0;
-    glDrawBuffers(1, &draw_buf);
-
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        fprintf(stderr, "FBO tamamlanamadi (R32F renk eki desteklenmiyor olabilir)\n");
-        return 1;
-    }
-
-    /* Core profile'da VAO bagli olmadan cizim yapilamaz. Vertex verisi yok,
-     * bos bir VAO yeterli. */
-    GLuint vao;
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-    // array object - buffer object farkı 
-
-    GLuint prog = gl_program_graphics("fullscreen.vert", "gemm.frag");
+    GLuint prog = My_glCreateComputeProgram("gemm.frag");
     if (!prog) return 1;
 
     glUseProgram(prog);
-    glUniform1i(glGetUniformLocation(prog, "uA"), 0);   /* doku birimi 0 */
-    glUniform1i(glGetUniformLocation(prog, "uB"), 1);   /* doku birimi 1 */
-    glUniform1i(glGetUniformLocation(prog, "uK"), N);
+    /* GLES 2.0'da indisleri float tutuyoruz; comp.c'de bunlar glUniform1i. */
+    glUniform1f(glGetUniformLocation(prog, "uM"), (float)N);
+    glUniform1f(glGetUniformLocation(prog, "uN"), (float)N);
+    glUniform1f(glGetUniformLocation(prog, "uK"), (float)N);
 
-    glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, texA);
-    glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, texB);
-
-    /* Viewport hedef dokuyu birebir kaplar: N*N fragment, hucre basina bir tane. */
-    glViewport(0, 0, N, N);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_BLEND);          /* karistirma acik kalirsa sonuc bozulur */
+    /* Compute'ta bu bilgi shader'in icindeydi (layout(local_size_x = 16,
+     * local_size_y = 16)); fragment yolunda viewport'u belirledigi icin C
+     * tarafinda soyleniyor. N 16'nin kati degilse yukari yuvarlanir, tasan
+     * fragment'lari shader'daki discard eler. */
+    const int LOCAL = 16;
+    My_glProgramLocalSize(LOCAL, LOCAL);
+    GLuint groups = (GLuint)((N + LOCAL - 1) / LOCAL);
 
     /* ---------------------------------------------------------- olcum ----*/
     double samples[MM_RUNS];
     for (int r = 0; r < MM_WARMUP + MM_RUNS; ++r) {
         gl_timer_begin();
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        My_glDispatchCompute(groups, groups, 1);
         double ms = gl_timer_end_ms();
         if (r >= MM_WARMUP) samples[r - MM_WARMUP] = ms;
     }
@@ -129,8 +94,16 @@ int main(int argc, char **argv)
     printf("hizlanma           : %8.2fx  (CPU blocked'a gore)\n\n", cpu_ms / gpu_ms);
 
     /* ------------------------------------------------------ dogrulama ----*/
-    glReadBuffer(GL_COLOR_ATTACHMENT0);
-    glReadPixels(0, 0, N, N, GL_RED, GL_FLOAT, C_gpu.data);
+    /* Yazmalar geri okumadan once gorunur olmali. */
+    My_glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
+    My_glGetBufferSubData(&bufC, C_gpu.data);
+
+    if (show) {
+        printf("\n");
+        mat_print("A", &A, 8);
+        mat_print("B", &B, 8);
+        mat_print("C = A * B  (GPU sonucu)", &C_gpu, 8);
+    }
 
     if (verify) {
         Mat C_ref = mat_alloc(N, N);
@@ -145,6 +118,9 @@ int main(int argc, char **argv)
     GLenum err = glGetError();
     if (err != GL_NO_ERROR) fprintf(stderr, "[GL hatasi] 0x%04X\n", err);
 
+    My_glDeleteBuffer(&bufA);
+    My_glDeleteBuffer(&bufB);
+    My_glDeleteBuffer(&bufC);
     mat_free(&A); mat_free(&B); mat_free(&C_gpu);
     gl_shutdown();
     return 0;

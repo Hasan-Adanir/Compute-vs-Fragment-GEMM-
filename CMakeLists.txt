@@ -15,6 +15,11 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     set(CMAKE_C_FLAGS_RELEASE "-O2")
 endif()
 
+# MSVC fopen/snprintf icin "guvensiz" uyarisi basar; kod standart C, susturuyoruz.
+if(MSVC)
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+endif()
+
 # ---------------------------------------------------------------- GLFW ---
 # Homebrew / apt ile kuruluysa onu kullan, yoksa kaynaktan cek.
 list(APPEND CMAKE_PREFIX_PATH /opt/homebrew /usr/local)
@@ -46,7 +51,7 @@ if(UNIX AND NOT APPLE)
 endif()
 
 function(add_variant name)
-    add_executable(${name} src/${name}.c src/common.c)
+    add_executable(${name} src/${name}.c src/common.c ${ARGN})
     target_link_libraries(${name} PRIVATE glad glfw)
 
     # Shader'lar calisma aninda diskten okunuyor; kaynak agacinin yolunu gom.
@@ -62,7 +67,7 @@ function(add_variant name)
     endif()
 endfunction()
 
-add_variant(frag)
+add_variant(frag src/mygl.c)   # mygl.c: compute API'sinin fragment taklidi
 add_variant(comp)
 
 

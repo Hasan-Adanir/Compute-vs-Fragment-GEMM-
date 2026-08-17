@@ -20,8 +20,6 @@ static bool        g_has_compute;
 
 static void glfw_error_cb(int code, const char *desc)
 {
-    /* 4.3 alinamayinca GLFW burayi bir kez cagirir; bu beklenen bir durum,
-     * asagida sessizce 4.1'e dusuyoruz. */
     fprintf(stderr, "[GLFW %d] %s\n", code, desc);
 }
 
@@ -35,16 +33,15 @@ bool gl_init(void)
         return false;
     }
 
-    const int versions[][2] = { {4, 3}, {4, 1} };
-    for (int i = 0; i < 2 && !g_window; ++i) {
-        glfwDefaultWindowHints();
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, versions[i][0]);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, versions[i][1]);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);   /* gorsel cikti yok */
-        g_window = glfwCreateWindow(64, 64, "matmul", NULL, NULL);
-    }
+    /* Profil ve surum istemiyoruz. Sebep: core profile cizim yapabilmek icin
+     * bir VAO bagli olmasini sart kosar, oysa GLES 2.0'da VAO diye bir sey
+     * yok -- frag yolu sadece bir VBO ile calisiyor. Profil belirtmeyince
+     * surucu en yuksek compatibility profile'i verir (Linux/Mesa'da 4.6):
+     * VAO 0 gecerli kalir ve comp yolu icin gereken compute shader da elde
+     * kalir. macOS bu yolda 2.1'de takilir; ornekler Linux'ta calistirilmali. */
+    glfwDefaultWindowHints();
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);   /* gorsel cikti yok */
+    g_window = glfwCreateWindow(64, 64, "matmul", NULL, NULL);
     if (!g_window) {
         fprintf(stderr, "OpenGL baglami olusturulamadi\n");
         glfwTerminate();
@@ -54,6 +51,14 @@ bool gl_init(void)
     glfwMakeContextCurrent(g_window);
     if (gladLoadGL((GLADloadfunc)glfwGetProcAddress) == 0) {
         fprintf(stderr, "GLAD yuklenemedi\n");
+        return false;
+    }
+
+    if (!GLAD_GL_VERSION_3_0) {
+        fprintf(stderr,
+                "OpenGL %s alindi. FBO ve float doku icin en az 3.0 gerekiyor;\n"
+                "macOS compatibility profile'i 2.1'de birakir -- Linux'ta calistirin.\n",
+                (const char *)glGetString(GL_VERSION));
         return false;
     }
 
@@ -126,6 +131,12 @@ static GLuint link_of(GLuint *stages, int n)
 {
     GLuint prog = glCreateProgram();
     for (int i = 0; i < n; ++i) glAttachShader(prog, stages[i]);
+
+    /* GLES 2.0'da layout(location = ...) yok; attribute konumu link'ten once
+     * elle baglaniyor. My_glInit() 0 numarali konumu kullaniyor.
+     * (Vertex shader'i olmayan programlarda etkisiz.) */
+    glBindAttribLocation(prog, 0, "aPos");
+
     glLinkProgram(prog);
 
     GLint ok = 0;
@@ -198,6 +209,25 @@ void mat_free(Mat *m)
 {
     free(m->data);
     m->data = NULL;
+}
+
+void mat_print(const char *name, const Mat *m, int max)
+{
+    int R = m->rows < max ? m->rows : max;
+    int C = m->cols < max ? m->cols : max;
+
+    printf("%s  (%dx%d", name, m->rows, m->cols);
+    if (R < m->rows || C < m->cols) printf(", sol ust %dx%d gosteriliyor", R, C);
+    printf(")\n");
+
+    for (int i = 0; i < R; ++i) {
+        printf("   ");
+        for (int j = 0; j < C; ++j)
+            printf("%10.4f", m->data[(size_t)i * m->cols + j]);
+        printf(C < m->cols ? "   ...\n" : "\n");
+    }
+    if (R < m->rows) printf("        ...\n");
+    printf("\n");
 }
 
 void mat_fill_random(Mat *m, unsigned int seed)
@@ -305,7 +335,8 @@ double mm_gflops(int N, double ms)
 
 double mm_now_ms(void)
 {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1.0e6;
+    /* clock_gettime MSVC'de yok. GLFW zaten bagli ve glfwGetTime her platformda
+     * yuksek cozunurluklu monotonik bir saat veriyor; ayrica koda platform
+     * ayrimi sokmuyor. (glfwInit sonrasi cagrilmali -- oyle cagriliyor.) */
+    return glfwGetTime() * 1000.0;
 }

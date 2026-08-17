@@ -34,9 +34,11 @@ int main(int argc, char **argv)
 {
     int  N      = 512;
     bool verify = true;
+    bool show   = false;
     for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "--noverify") == 0) verify = false;
-        else { int v = atoi(argv[i]); if (v >= 16) N = v; }
+        if      (strcmp(argv[i], "--noverify") == 0) verify = false;
+        else if (strcmp(argv[i], "--print")    == 0) show   = true;   /* matrisleri bas */
+        else { int v = atoi(argv[i]); if (v >= 2) N = v; }
     }
 
     if (!gl_init()) return 1;
@@ -106,6 +108,13 @@ int main(int argc, char **argv)
     glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, bufC);
     glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, (GLsizeiptr)bytes, C_gpu.data);
+
+    if (show) {
+        printf("\n");
+        mat_print("A", &A, 8);
+        mat_print("B", &B, 8);
+        mat_print("C = A * B  (GPU sonucu)", &C_gpu, 8);
+    }
 
     if (verify) {
         Mat C_ref = mat_alloc(N, N);
