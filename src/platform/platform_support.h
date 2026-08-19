@@ -1,8 +1,8 @@
 /* Iki varyantin (frag_naive.c, comp_naive.c) ortak kullandigi asgari yardimcilar.
  * Burada is mantigi yok: GL baglami, shader yukleme, zamanlayici ve CPU
  * referansi. Asil anlatilmak istenen sey varyant dosyalarinin icinde. */
-#ifndef MM_COMMON_H
-#define MM_COMMON_H
+#ifndef PLATFORM_SUPPORT_H
+#define PLATFORM_SUPPORT_H
 
 #include <glad/gl.h>
 #include <stdbool.h>
@@ -65,4 +65,4 @@ double mm_median(double *samples, int count);   /* diziyi siralar */
 double mm_gflops(int N, double ms);             /* 2*N^3 / t */
 double mm_now_ms(void);
 
-#endif /* MM_COMMON_H */
+#endif /* PLATFORM_SUPPORT_H */

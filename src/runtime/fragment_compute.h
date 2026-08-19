@@ -26,10 +26,10 @@
  *   - shared bellek, barrier(), atomik islem yok
  *   - num_groups_z 1 olmak zorunda (katmanli render yok)
  * ===========================================================================*/
-#ifndef MY_GL_H
-#define MY_GL_H
+#ifndef FRAGMENT_COMPUTE_H
+#define FRAGMENT_COMPUTE_H
 
-#include "common.h"
+#include "platform_support.h"
 
 /* SSBO'nun karsiligi. Veri dokuda durur; cikti buffer'i ayrica bir FBO'ya
  * renk eki olarak baglanir, cunku fragment shader ancak oraya yazabilir. */
@@ -71,4 +71,4 @@ void My_glMemoryBarrier(GLbitfield barriers);
  * dst en az buf->w * buf->h float tutacak kadar buyuk olmali. */
 void My_glGetBufferSubData(MyBuffer *buf, float *dst);
 
-#endif /* MY_GL_H */
+#endif /* FRAGMENT_COMPUTE_H */

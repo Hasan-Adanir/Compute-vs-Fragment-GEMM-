@@ -15,7 +15,7 @@
   yerine tam ekran ucgen, cikti yerine FBO.
  */
 
-#include "mygl.h"
+#include "fragment_compute.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -62,7 +62,7 @@ int main(int argc, char **argv)
     My_glBindBufferBase(1, &bufB);
     My_glBindBufferBase(2, &bufC);
 
-    GLuint prog = My_glCreateComputeProgram("gemm.frag");
+    GLuint prog = My_glCreateComputeProgram("fragment/matrix_multiply.frag");
     if (!prog) return 1;
 
     glUseProgram(prog);

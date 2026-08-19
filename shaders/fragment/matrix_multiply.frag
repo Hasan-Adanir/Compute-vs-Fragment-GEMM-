@@ -1,7 +1,7 @@
 #version 120
 /* GLES 2.0'da bu satir "#version 100" olur. */
 
-/* C = A * B -- gemm.comp'un GLES 2.0 fragment shader karsiligi.
+/* C = A * B -- matrix_multiply.comp'in GLES 2.0 fragment shader karsiligi.
  * Ayni algoritma, satir sirasi da ayni. Cevirinin tamami su tablo:
  *
  *   gemm.comp                            gemm.frag

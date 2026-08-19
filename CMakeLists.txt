@@ -50,8 +50,14 @@ if(UNIX AND NOT APPLE)
     find_package(OpenGL REQUIRED)
 endif()
 
-function(add_variant name)
-    add_executable(${name} src/${name}.c src/common.c ${ARGN})
+function(add_variant name main_source)
+    add_executable(${name}
+        ${main_source}
+        src/platform/platform_support.c
+        ${ARGN})
+    target_include_directories(${name} PRIVATE
+        src/platform
+        src/runtime)
     target_link_libraries(${name} PRIVATE glad glfw)
 
     # Shader'lar calisma aninda diskten okunuyor; kaynak agacinin yolunu gom.
@@ -67,7 +73,7 @@ function(add_variant name)
     endif()
 endfunction()
 
-add_variant(frag src/mygl.c)   # mygl.c: compute API'sinin fragment taklidi
-add_variant(comp)
+add_variant(fragment_main src/app/fragment_main.c src/runtime/fragment_compute.c)
+add_variant(compute_main src/app/compute_main.c)
 
 

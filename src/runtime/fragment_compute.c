@@ -2,7 +2,7 @@
  * her fonksiyon, mygl.h'deki tabloda karsisinda duran compute cagrisinin
  * yaptigi isi GLES 2.0 araclariyla yapar. */
 
-#include "mygl.h"
+#include "fragment_compute.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -122,7 +122,7 @@ GLuint My_glCreateComputeProgram(const char *frag_file)
 {
     /* Numaranin tamami bu satirda: "compute" kernel'i bir fragment shader ve
      * onu is uretecek bir vertex shader'la linkliyoruz. */
-    return gl_program_graphics("fullscreen.vert", frag_file);
+    return gl_program_graphics("common/fullscreen.vert", frag_file);
 }
 
 void My_glProgramLocalSize(int local_x, int local_y)

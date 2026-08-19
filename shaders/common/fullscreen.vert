@@ -1,5 +1,5 @@
 #version 120
-/* GLES 2.0'da bu satir "#version 100" olur; GLSL 1.20 ayni sozdizimini
+/* Ortak tam ekran ucgen shader'i. GLES 2.0'da bu satir "#version 100" olur; GLSL 1.20 ayni sozdizimini
  * (attribute / varying / gl_FragColor / texture2D) masaustunde de kabul
  * ettigi icin tek dosyayla idare ediyoruz. */
 

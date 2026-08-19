@@ -1,4 +1,4 @@
-#include "common.h"
+#include "platform_support.h"
 
 #include <GLFW/glfw3.h>
 

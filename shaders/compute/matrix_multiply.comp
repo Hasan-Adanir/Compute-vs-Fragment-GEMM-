@@ -1,6 +1,6 @@
 #version 430 core
 
-/* C = A * B, compute shader ile. gemm_naive.frag ile ayni algoritma.
+/* C = A * B, compute shader ile. matrix_multiply.frag ile ayni algoritma.
  *
  * Farklar:
  *   - Veri dokuda degil SSBO'da: duz float dizisi, indisleme C tarafiyla ayni.

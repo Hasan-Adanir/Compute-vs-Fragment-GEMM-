@@ -13,7 +13,7 @@
  *
  * ===========================================================================*/
 
-#include "common.h"
+#include "platform_support.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -76,7 +76,7 @@ int main(int argc, char **argv)
     GLuint bufB = upload_ssbo(1, B.data, bytes);
     GLuint bufC = upload_ssbo(2, NULL,   bytes);
 
-    GLuint prog = gl_program_compute("gemm.comp");
+    GLuint prog = gl_program_compute("compute/matrix_multiply.comp");
     if (!prog) return 1;
 
     glUseProgram(prog);
