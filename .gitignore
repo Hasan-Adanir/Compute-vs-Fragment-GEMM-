@@ -1,4 +1,6 @@
 build/
+build-clion/
+cmake-build-*/
 .DS_Store
 compile_commands.json
 results/*.csv
