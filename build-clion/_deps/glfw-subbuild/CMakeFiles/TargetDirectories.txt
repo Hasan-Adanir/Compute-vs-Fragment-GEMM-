@@ -1,3 +1,0 @@
-C:/Users/Ozan/Desktop/Workspace/OpenGL_Proje/Compute-vs-Fragment-GEMM-/build-clion/_deps/glfw-subbuild/CMakeFiles/glfw-populate.dir
-C:/Users/Ozan/Desktop/Workspace/OpenGL_Proje/Compute-vs-Fragment-GEMM-/build-clion/_deps/glfw-subbuild/CMakeFiles/edit_cache.dir
-C:/Users/Ozan/Desktop/Workspace/OpenGL_Proje/Compute-vs-Fragment-GEMM-/build-clion/_deps/glfw-subbuild/CMakeFiles/rebuild_cache.dir

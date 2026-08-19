@@ -57,7 +57,8 @@ function(add_variant name main_source)
         ${ARGN})
     target_include_directories(${name} PRIVATE
         src/platform
-        src/runtime)
+        src/runtime
+        src/operations)
     target_link_libraries(${name} PRIVATE glad glfw)
 
     # Shader'lar calisma aninda diskten okunuyor; kaynak agacinin yolunu gom.
@@ -73,7 +74,10 @@ function(add_variant name main_source)
     endif()
 endfunction()
 
-add_variant(fragment_main src/app/fragment_main.c src/runtime/fragment_compute.c)
-add_variant(compute_main src/app/compute_main.c)
+add_variant(fragment_main src/app/fragment_main.c
+    src/runtime/fragment_compute.c
+    src/operations/matrix_operation.c)
+add_variant(compute_main src/app/compute_main.c
+    src/operations/matrix_operation.c)
 
 
