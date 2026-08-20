@@ -39,6 +39,40 @@ typedef struct {
     int    w, h;
 } MyBuffer;
 
+#define MY_GL_MAX_BINDINGS 8
+
+/* Fragment-compute islemi boyunca korunacak OpenGL context state'i.
+ * Bu yapiyi dogrudan degistirmek yerine Begin/End fonksiyonlari kullanilir. */
+typedef struct {
+    GLint program;
+    GLint framebuffer;
+    GLint viewport[4];
+
+    GLint active_texture;
+    GLint texture_2d[MY_GL_MAX_BINDINGS];
+    GLint array_buffer;
+
+    GLint attrib0_enabled;
+    GLint attrib0_size;
+    GLint attrib0_stride;
+    GLint attrib0_type;
+    GLint attrib0_normalized;
+    GLint attrib0_buffer;
+    void *attrib0_pointer;
+
+    GLboolean depth_test;
+    GLboolean blend;
+    GLboolean cull_face;
+    GLboolean scissor_test;
+    GLboolean color_mask[4];
+    bool active;
+} MyGLStateSnapshot;
+
+/* Fragment islemi icin bir state kapsami acar/kapatir. End cagrisi, hata
+ * durumlari dahil olmak uzere, Begin oncesindeki state'i geri yukler. */
+bool My_glBeginStateScope(MyGLStateSnapshot *snapshot);
+void My_glEndStateScope(MyGLStateSnapshot *snapshot);
+
 /* Tam ekran ucgenin VBO'sunu kurar. Bir kez cagrilir. */
 void My_glInit(void);
 

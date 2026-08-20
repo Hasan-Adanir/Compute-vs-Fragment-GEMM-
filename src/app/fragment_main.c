@@ -18,7 +18,7 @@ typedef struct {
 static bool run_operation(MatrixOperation operation, int n, bool verify,
                           bool show, const Mat *A, const Mat *B, Mat *C_gpu,
                           MyBuffer *output, GLuint groups,
-                          OperationResult *result)
+                          OperationResult *result)  
 {
     double start = mm_now_ms();
     matrix_operation_cpu(operation, A, B, C_gpu);
@@ -27,6 +27,14 @@ static bool run_operation(MatrixOperation operation, int n, bool verify,
     GLuint program = My_glCreateComputeProgram(
         matrix_operation_fragment_shader(operation));
     if (!program) return false;
+
+    MyGLStateSnapshot state = {0};
+    if (!My_glBeginStateScope(&state)) {
+        fprintf(stderr, "Fragment OpenGL state'i kaydedilemedi.\n");
+        My_glEndStateScope(&state);
+        glDeleteProgram(program);
+        return false;
+    }
 
     glUseProgram(program);
     glUniform1f(glGetUniformLocation(program, "uM"), (float)n);
@@ -65,6 +73,9 @@ static bool run_operation(MatrixOperation operation, int n, bool verify,
         printf("  dogrulama atlandi (--noverify)\n");
     }
 
+    /* Program, framebuffer, viewport, texture unit'leri, vertex input ve
+     * pipeline acik/kapali state'leri bu noktada eski haline getirilir. */
+    My_glEndStateScope(&state);
     glDeleteProgram(program);
     return valid;
 }

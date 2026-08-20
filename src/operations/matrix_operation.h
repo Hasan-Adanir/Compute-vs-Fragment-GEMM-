@@ -25,3 +25,10 @@ void matrix_operation_reference(MatrixOperation operation,
 double matrix_operation_gflops(MatrixOperation operation, int n, double ms);
 
 #endif
+
+/*Ayrıca şu görevleri yapar:
+- Yazıyla verilen işlem adını enum değerine çevirmek
+- İşleme uygun fragment shader dosyasını seçmek
+- CPU referans hesabını yapmak
+- Bölme için giriş verisini güvenli hâle getirmek
+- İşlem adını yazdırmak */

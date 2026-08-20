@@ -16,9 +16,7 @@
 #define MY_TEX_INTERNAL GL_RGBA32F
 #endif
 
-#define MY_MAX_BINDINGS 8
-
-static MyBuffer *g_bound[MY_MAX_BINDINGS];
+static MyBuffer *g_bound[MY_GL_MAX_BINDINGS];
 static GLuint    g_vbo;
 static int       g_local_x = 1;
 static int       g_local_y = 1;
@@ -33,17 +31,96 @@ void My_glInit(void)
      * bir VBO'dan geliyor. */
     static const GLfloat tri[6] = { -1.0f, -1.0f,  3.0f, -1.0f,  -1.0f, 3.0f };
 
+    GLint previous_array_buffer = 0;
+    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &previous_array_buffer);
+
     glGenBuffers(1, &g_vbo);
     glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(tri), tri, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, (GLuint)previous_array_buffer);
+}
 
-    /* VAO yok: attribute durumu global. Bir kez kuruluyor ve oyle kaliyor.
-     * aPos, link sirasinda 0 numarali konuma baglaniyor (common.c). */
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (const void *)0);
+/* ======================================================== state kapsami ==*/
 
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_BLEND);   /* karistirma acik kalirsa sonuc bozulur */
+static void restore_capability(GLenum capability, GLboolean enabled)
+{
+    if (enabled) glEnable(capability);
+    else glDisable(capability);
+}
+
+bool My_glBeginStateScope(MyGLStateSnapshot *state)
+{
+    if (!state) return false;
+
+    glGetIntegerv(GL_CURRENT_PROGRAM, &state->program);
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &state->framebuffer);
+    glGetIntegerv(GL_VIEWPORT, state->viewport);
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &state->active_texture);
+    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &state->array_buffer);
+
+    for (int i = 0; i < MY_GL_MAX_BINDINGS; ++i) {
+        glActiveTexture(GL_TEXTURE0 + (GLenum)i);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &state->texture_2d[i]);
+    }
+
+    glGetVertexAttribiv(0, GL_VERTEX_ATTRIB_ARRAY_ENABLED,
+                       &state->attrib0_enabled);
+    glGetVertexAttribiv(0, GL_VERTEX_ATTRIB_ARRAY_SIZE,
+                       &state->attrib0_size);
+    glGetVertexAttribiv(0, GL_VERTEX_ATTRIB_ARRAY_STRIDE,
+                       &state->attrib0_stride);
+    glGetVertexAttribiv(0, GL_VERTEX_ATTRIB_ARRAY_TYPE,
+                       &state->attrib0_type);
+    glGetVertexAttribiv(0, GL_VERTEX_ATTRIB_ARRAY_NORMALIZED,
+                       &state->attrib0_normalized);
+    glGetVertexAttribiv(0, GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING,
+                       &state->attrib0_buffer);
+    glGetVertexAttribPointerv(0, GL_VERTEX_ATTRIB_ARRAY_POINTER,
+                             &state->attrib0_pointer);
+
+    state->depth_test = glIsEnabled(GL_DEPTH_TEST);
+    state->blend = glIsEnabled(GL_BLEND);
+    state->cull_face = glIsEnabled(GL_CULL_FACE);
+    state->scissor_test = glIsEnabled(GL_SCISSOR_TEST);
+    glGetBooleanv(GL_COLOR_WRITEMASK, state->color_mask);
+    state->active = true;
+
+    /* Capture dongusu aktif texture unit'i degistirdigi icin, daha fragment
+     * state'i kurulmadan once cagri girisindeki degeri geri koyuyoruz. */
+    glActiveTexture((GLenum)state->active_texture);
+    return glGetError() == GL_NO_ERROR;
+}
+
+void My_glEndStateScope(MyGLStateSnapshot *state)
+{
+    if (!state || !state->active) return;
+
+    for (int i = 0; i < MY_GL_MAX_BINDINGS; ++i) {
+        glActiveTexture(GL_TEXTURE0 + (GLenum)i);
+        glBindTexture(GL_TEXTURE_2D, (GLuint)state->texture_2d[i]);
+    }
+    glActiveTexture((GLenum)state->active_texture);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)state->framebuffer);
+    glViewport(state->viewport[0], state->viewport[1],
+               state->viewport[2], state->viewport[3]);
+    glUseProgram((GLuint)state->program);
+
+    glBindBuffer(GL_ARRAY_BUFFER, (GLuint)state->attrib0_buffer);
+    glVertexAttribPointer(0, state->attrib0_size, (GLenum)state->attrib0_type,
+                          (GLboolean)state->attrib0_normalized,
+                          state->attrib0_stride, state->attrib0_pointer);
+    if (state->attrib0_enabled) glEnableVertexAttribArray(0);
+    else glDisableVertexAttribArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, (GLuint)state->array_buffer);
+
+    restore_capability(GL_DEPTH_TEST, state->depth_test);
+    restore_capability(GL_BLEND, state->blend);
+    restore_capability(GL_CULL_FACE, state->cull_face);
+    restore_capability(GL_SCISSOR_TEST, state->scissor_test);
+    glColorMask(state->color_mask[0], state->color_mask[1],
+                state->color_mask[2], state->color_mask[3]);
+    state->active = false;
 }
 
 /* ============================================================== buffer ==*/
@@ -51,6 +128,10 @@ void My_glInit(void)
 MyBuffer My_glCreateBuffer(int w, int h, const float *data)
 {
     MyBuffer b;
+    GLint previous_texture = 0;
+    GLint previous_framebuffer = 0;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &previous_texture);
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_framebuffer);
     b.w   = w;
     b.h   = h;
     b.fbo = 0;
@@ -87,8 +168,9 @@ MyBuffer My_glCreateBuffer(int w, int h, const float *data)
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
             fprintf(stderr, "My_glCreateBuffer: FBO tamamlanamadi "
                             "(float doku hedefi desteklenmiyor olabilir)\n");
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
+    glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)previous_framebuffer);
+    glBindTexture(GL_TEXTURE_2D, (GLuint)previous_texture);
     return b;
 }
 
@@ -109,7 +191,7 @@ void My_glBindBufferBase(GLuint binding, MyBuffer *buf)
     /* Baglama noktasi burada sadece not ediliyor; doku birimine bagli hale
      * gelmesi ve uniform'larinin doldurulmasi dispatch aninda oluyor, cunku
      * o ana kadar hangi programin kullanildigi belli degil. */
-    if (binding < MY_MAX_BINDINGS)
+    if (binding < MY_GL_MAX_BINDINGS)
         g_bound[binding] = buf;
 }
 
@@ -162,7 +244,19 @@ void My_glDispatchCompute(GLuint num_groups_x, GLuint num_groups_y,
     /* Girdi buffer'lari doku birimlerine baglanir. Shader tarafinda binding i
      * icin uBuf<i> ve uBuf<i>_size uniform'lari bekleniyor; compute'taki
      * layout(std430, binding = i) buffer bloklarinin karsiligi bu. */
-    for (int i = 0; i < MY_MAX_BINDINGS; ++i) {
+    /* Runtime'in dogru sonuc uretebilmesi icin gerekli pipeline state'i.
+     * State scope kapandiginda tumu cagri oncesindeki haline geri gelir. */
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_SCISSOR_TEST);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+    glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (const void *)0);
+
+    for (int i = 0; i < MY_GL_MAX_BINDINGS; ++i) {
         MyBuffer *b = g_bound[i];
         char      name[32];
 
@@ -218,6 +312,9 @@ void My_glGetBufferSubData(MyBuffer *buf, float *dst)
     /* Veri buffer'da degil dokuda; okuma yolu da glGetBufferSubData degil
      * glReadPixels. GLES 2.0'da tek kanalli okuma yok, RGBA okuyup .r
      * kanalini ayikliyoruz. */
+    GLint previous_framebuffer = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_framebuffer);
+
     size_t n    = (size_t)buf->w * (size_t)buf->h;
     float *rgba = (float *)malloc(n * 4 * sizeof(float));
 
@@ -228,4 +325,5 @@ void My_glGetBufferSubData(MyBuffer *buf, float *dst)
         dst[i] = rgba[i * 4];
 
     free(rgba);
+    glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)previous_framebuffer);
 }
