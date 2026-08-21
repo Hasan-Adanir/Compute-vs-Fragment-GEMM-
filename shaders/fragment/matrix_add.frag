@@ -10,6 +10,7 @@ uniform vec2 uBuf1_size;
 uniform float uM;
 uniform float uN;
 
+/* Loads one buffer value. */
 float bufferLoad(sampler2D bufferTexture, vec2 size, float index)
 {
     float y = floor(index / size.x);
@@ -17,6 +18,7 @@ float bufferLoad(sampler2D bufferTexture, vec2 size, float index)
     return texture2D(bufferTexture, (vec2(x, y) + 0.5) / size).r;
 }
 
+/* Adds one element pair. */
 void main()
 {
     float column = floor(gl_FragCoord.x);

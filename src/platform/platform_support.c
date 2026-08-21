@@ -16,16 +16,16 @@ static GLFWwindow *g_window;
 static GLuint      g_query;
 static bool        g_has_compute;
 
-/* ============================================================ GL baglami ==*/
-
+/* Reports GLFW errors. */
 static void glfw_error_cb(int code, const char *desc)
 {
     fprintf(stderr, "[GLFW %d] %s\n", code, desc);
 }
 
+/* Initializes the OpenGL context. */
 bool gl_init(void)
 {
-    setvbuf(stdout, NULL, _IOLBF, 0);   /* dosyaya yonlendirince de anlik cikti */
+    setvbuf(stdout, NULL, _IOLBF, 0); /* Keep output immediate. */
 
     glfwSetErrorCallback(glfw_error_cb);
     if (!glfwInit()) {
@@ -33,14 +33,9 @@ bool gl_init(void)
         return false;
     }
 
-    /* Profil ve surum istemiyoruz. Sebep: core profile cizim yapabilmek icin
-     * bir VAO bagli olmasini sart kosar, oysa GLES 2.0'da VAO diye bir sey
-     * yok -- frag yolu sadece bir VBO ile calisiyor. Profil belirtmeyince
-     * surucu en yuksek compatibility profile'i verir (Linux/Mesa'da 4.6):
-     * VAO 0 gecerli kalir ve comp yolu icin gereken compute shader da elde
-     * kalir. macOS bu yolda 2.1'de takilir; ornekler Linux'ta calistirilmali. */
+    /* Use a compatibility profile for the VAO-free fragment path. */
     glfwDefaultWindowHints();
-    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);   /* gorsel cikti yok */
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE); /* Hide the window. */
     g_window = glfwCreateWindow(64, 64, "matmul", NULL, NULL);
     if (!g_window) {
         fprintf(stderr, "OpenGL baglami olusturulamadi\n");
@@ -67,6 +62,7 @@ bool gl_init(void)
     return true;
 }
 
+/* Releases OpenGL resources. */
 void gl_shutdown(void)
 {
     if (g_query) glDeleteQueries(1, &g_query);
@@ -74,8 +70,10 @@ void gl_shutdown(void)
     glfwTerminate();
 }
 
+/* Reports compute-shader support. */
 bool gl_has_compute(void) { return g_has_compute; }
 
+/* Prints OpenGL device details. */
 void gl_print_info(void)
 {
     printf("GPU      : %s (%s)\n", glGetString(GL_RENDERER), glGetString(GL_VENDOR));
@@ -84,8 +82,7 @@ void gl_print_info(void)
     printf("Compute  : %s\n", g_has_compute ? "var" : "yok (GL 4.3 gerekiyor)");
 }
 
-/* ================================================================ shader ==*/
-
+/* Reads a shader file. */
 static char *read_file(const char *rel)
 {
     char path[1024];
@@ -105,6 +102,7 @@ static char *read_file(const char *rel)
     return buf;
 }
 
+/* Compiles a shader stage. */
 static GLuint compile(GLenum type, const char *file)
 {
     char *src = read_file(file);
@@ -127,14 +125,13 @@ static GLuint compile(GLenum type, const char *file)
     return sh;
 }
 
+/* Links shader stages. */
 static GLuint link_of(GLuint *stages, int n)
 {
     GLuint prog = glCreateProgram();
     for (int i = 0; i < n; ++i) glAttachShader(prog, stages[i]);
 
-    /* GLES 2.0'da layout(location = ...) yok; attribute konumu link'ten once
-     * elle baglaniyor. My_glInit() 0 numarali konumu kullaniyor.
-     * (Vertex shader'i olmayan programlarda etkisiz.) */
+    /* Bind the GLES 2.0 vertex attribute. */
     glBindAttribLocation(prog, 0, "aPos");
 
     glLinkProgram(prog);
@@ -152,6 +149,7 @@ static GLuint link_of(GLuint *stages, int n)
     return prog;
 }
 
+/* Creates a graphics program. */
 GLuint gl_program_graphics(const char *vert_file, const char *frag_file)
 {
     GLuint vs = compile(GL_VERTEX_SHADER, vert_file);
@@ -163,6 +161,7 @@ GLuint gl_program_graphics(const char *vert_file, const char *frag_file)
     return link_of(stages, 2);
 }
 
+/* Creates a compute program. */
 GLuint gl_program_compute(const char *comp_file)
 {
     GLuint cs = compile(GL_COMPUTE_SHADER, comp_file);
@@ -170,13 +169,13 @@ GLuint gl_program_compute(const char *comp_file)
     return link_of(&cs, 1);
 }
 
-/* =========================================================== zamanlayici ==*/
-
+/* Starts GPU timing. */
 void gl_timer_begin(void)
 {
     glBeginQuery(GL_TIME_ELAPSED, g_query);
 }
 
+/* Stops GPU timing. */
 double gl_timer_end_ms(void)
 {
     glEndQuery(GL_TIME_ELAPSED);
@@ -190,8 +189,7 @@ double gl_timer_end_ms(void)
     return (double)ns / 1.0e6;
 }
 
-/* ================================================================ matris ==*/
-
+/* Allocates a matrix. */
 Mat mat_alloc(int rows, int cols)
 {
     Mat m;
@@ -205,12 +203,14 @@ Mat mat_alloc(int rows, int cols)
     return m;
 }
 
+/* Frees a matrix. */
 void mat_free(Mat *m)
 {
     free(m->data);
     m->data = NULL;
 }
 
+/* Prints a matrix preview. */
 void mat_print(const char *name, const Mat *m, int max)
 {
     int R = m->rows < max ? m->rows : max;
@@ -230,6 +230,7 @@ void mat_print(const char *name, const Mat *m, int max)
     printf("\n");
 }
 
+/* Fills a matrix deterministically. */
 void mat_fill_random(Mat *m, unsigned int seed)
 {
     unsigned int s = seed ? seed : 1u;
@@ -237,12 +238,13 @@ void mat_fill_random(Mat *m, unsigned int seed)
     for (size_t i = 0; i < n; ++i) {
         s ^= s << 13; 
         s ^= s >> 17; 
-        s ^= s << 5;      /* xorshift32 */
+        s ^= s << 5; /* xorshift32 */
         float u = (float)(s >> 8) / (float)(1u << 24); /* [0,1) */
-        m->data[i] = u * 2.0f - 1.0f;                  /* [-1,1) */
+        m->data[i] = u * 2.0f - 1.0f; /* [-1,1) */
     }
 }
 
+/* Multiplies matrices accurately. */
 void mat_mul_reference(const Mat *A, const Mat *B, Mat *C)
 {
     int M = A->rows, K = A->cols, N = B->cols;
@@ -256,6 +258,7 @@ void mat_mul_reference(const Mat *A, const Mat *B, Mat *C)
         }
 }
 
+/* Multiplies matrices on the CPU. */
 void mat_mul_cpu(const Mat *A, const Mat *B, Mat *C)
 {
     int M = A->rows, K = A->cols, N = B->cols;
@@ -280,6 +283,7 @@ void mat_mul_cpu(const Mat *A, const Mat *B, Mat *C)
             }
 }
 
+/* Compares matrix results. */
 bool mat_check(const Mat *ref, const Mat *test)
 {
     size_t n = (size_t)ref->rows * (size_t)ref->cols;
@@ -312,14 +316,14 @@ bool mat_check(const Mat *ref, const Mat *test)
     return ok;
 }
 
-/* ================================================================= olcum ==*/
-
+/* Compares two doubles. */
 static int cmp_double(const void *a, const void *b)
 {
     double x = *(const double *)a, y = *(const double *)b;
     return (x > y) - (x < y);
 }
 
+/* Returns the sample median. */
 double mm_median(double *samples, int count)
 {
     qsort(samples, (size_t)count, sizeof(double), cmp_double);
@@ -327,16 +331,16 @@ double mm_median(double *samples, int count)
                        : 0.5 * (samples[count / 2 - 1] + samples[count / 2]);
 }
 
+/* Calculates multiplication throughput. */
 double mm_gflops(int N, double ms)
 {
-    /* Her hucre-adiminda bir carpma + bir toplama. */
+    /* Count one multiply and one add. */
     return (2.0 * (double)N * N * N) / (ms / 1000.0) / 1.0e9;
 }
 
+/* Returns monotonic time in milliseconds. */
 double mm_now_ms(void)
 {
-    /* clock_gettime MSVC'de yok. GLFW zaten bagli ve glfwGetTime her platformda
-     * yuksek cozunurluklu monotonik bir saat veriyor; ayrica koda platform
-     * ayrimi sokmuyor. (glfwInit sonrasi cagrilmali -- oyle cagriliyor.) */
+    /* Use GLFW for portable timing. */
     return glfwGetTime() * 1000.0;
 }

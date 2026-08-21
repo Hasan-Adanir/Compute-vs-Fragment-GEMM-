@@ -1,5 +1,4 @@
-/* Kullanici tarafindan girilen matrisleri yalnizca fragment shader yoluyla
- * isleyen bagimsiz terminal uygulamasi. Compute shader kullanmaz. */
+/* Runs interactive fragment-shader matrix operations. */
 
 #include "fragment_compute.h"
 #include "matrix_operation.h"
@@ -12,6 +11,7 @@
 
 #define CLI_MAX_DIMENSION 4096
 
+/* Reads a bounded integer. */
 static bool read_int(const char *prompt, int minimum, int maximum, int *value)
 {
     char line[128];
@@ -36,6 +36,7 @@ static bool read_int(const char *prompt, int minimum, int maximum, int *value)
     }
 }
 
+/* Reads a valid float. */
 static bool read_float(const char *prompt, bool reject_zero, float *value)
 {
     char line[128];
@@ -62,6 +63,7 @@ static bool read_float(const char *prompt, bool reject_zero, float *value)
     }
 }
 
+/* Reads all matrix values. */
 static bool read_matrix(const char *name, Mat *matrix, bool reject_zero)
 {
     printf("%s matrisinin elemanlarini satir satir girin:\n", name);
@@ -78,6 +80,7 @@ static bool read_matrix(const char *name, Mat *matrix, bool reject_zero)
     return true;
 }
 
+/* Prints a matrix. */
 static void print_matrix(const char *name, const Mat *matrix)
 {
     printf("%s (%d x %d)\n", name, matrix->rows, matrix->cols);
@@ -89,6 +92,7 @@ static void print_matrix(const char *name, const Mat *matrix)
     }
 }
 
+/* Reads the operation choice. */
 static bool choose_operation(MatrixOperation *operation)
 {
     printf("Yapilacak islemi secin:\n"
@@ -110,6 +114,7 @@ static bool choose_operation(MatrixOperation *operation)
     return true;
 }
 
+/* Validates matrix dimensions. */
 static bool validate_dimensions(MatrixOperation operation,
                                 int a_rows, int a_cols,
                                 int b_rows, int b_cols,
@@ -141,6 +146,7 @@ static bool validate_dimensions(MatrixOperation operation,
     return true;
 }
 
+/* Runs the interactive CLI. */
 int main(void)
 {
     printf("=== Fragment Shader Matrix Terminal Arayuzu ===\n"

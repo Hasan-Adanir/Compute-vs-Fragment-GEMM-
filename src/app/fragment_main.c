@@ -1,6 +1,4 @@
-/* Fragment shader'lari genel amacli matris cekirdekleri gibi calistiran
- * uygulama. Varsayilan olarak tum islemleri olcer; islem adi verilirse
- * yalnizca secilen cekirdegi calistirir. */
+/* Runs fragment-shader matrix benchmarks. */
 
 #include "fragment_compute.h"
 #include "matrix_operation.h"
@@ -15,6 +13,7 @@ typedef struct {
     double gpu_ms;
 } OperationResult;
 
+/* Benchmarks one fragment operation. */
 static bool run_operation(MatrixOperation operation, int n, bool verify,
                           bool show, const Mat *A, const Mat *B, Mat *C_gpu,
                           MyBuffer *output, GLuint groups,
@@ -73,13 +72,13 @@ static bool run_operation(MatrixOperation operation, int n, bool verify,
         printf("  dogrulama atlandi (--noverify)\n");
     }
 
-    /* Program, framebuffer, viewport, texture unit'leri, vertex input ve
-     * pipeline acik/kapali state'leri bu noktada eski haline getirilir. */
+    /* Restore the previous OpenGL state. */
     My_glEndStateScope(&state);
     glDeleteProgram(program);
     return valid;
 }
 
+/* Prints benchmark results. */
 static void print_summary(const OperationResult *results, int count)
 {
     double total_cpu_ms = 0.0;
@@ -100,6 +99,7 @@ static void print_summary(const OperationResult *results, int count)
            "texture yukleme ve geri okuma bu sureye dahil degildir.\n");
 }
 
+/* Runs fragment-shader benchmarks. */
 int main(int argc, char **argv)
 {
     int n = 512;
@@ -138,8 +138,7 @@ int main(int argc, char **argv)
     Mat C_gpu = mat_alloc(n, n);
     mat_fill_random(&A, 12345u);
     mat_fill_random(&B, 67890u);
-    /* Tum islemler ayni A ve B matrislerini kullanir. Bolmenin tanimli ve
-     * sayisal olarak kararli kalmasi icin kucuk bolenler bir kez duzeltilir. */
+    /* Reuse inputs and stabilize divisors. */
     if (run_all || selected == MATRIX_OP_DIVIDE)
         matrix_operation_prepare_inputs(MATRIX_OP_DIVIDE, &B);
 

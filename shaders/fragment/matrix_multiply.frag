@@ -1,7 +1,7 @@
 #version 120
 
 #ifdef GL_ES
-precision highp float;   /* mediump 512 terimlik toplami tasiyamaz */
+precision highp float; /* Preserve long sums. */
 #endif
 
 uniform sampler2D uBuf0;        /* A */
@@ -9,10 +9,11 @@ uniform vec2      uBuf0_size;
 uniform sampler2D uBuf1;        /* B */
 uniform vec2      uBuf1_size;
 
-uniform float uM;   /* C'nin satir sayisi */
-uniform float uN;   /* C'nin sutun sayisi */
-uniform float uK;   /* toplama uzunlugu */
+uniform float uM; /* Output rows. */
+uniform float uN; /* Output columns. */
+uniform float uK; /* Sum length. */
 
+/* Loads one buffer value. */
 float My_bufferLoad(sampler2D buf, vec2 size, float index)
 {
     float y = floor(index / size.x);
@@ -22,6 +23,7 @@ float My_bufferLoad(sampler2D buf, vec2 size, float index)
 
 const int MY_MAX_K = 4096;
 
+/* Computes one output value. */
 void main()
 {
     float j = floor(gl_FragCoord.x);

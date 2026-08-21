@@ -3,6 +3,7 @@
 #include <math.h>
 #include <string.h>
 
+/* Parses a matrix operation name. */
 bool matrix_operation_parse(const char *text, MatrixOperation *operation)
 {
     if (strcmp(text, "multiply") == 0)      *operation = MATRIX_OP_MULTIPLY;
@@ -13,6 +14,7 @@ bool matrix_operation_parse(const char *text, MatrixOperation *operation)
     return true;
 }
 
+/* Returns the operation name. */
 const char *matrix_operation_name(MatrixOperation operation)
 {
     switch (operation) {
@@ -24,6 +26,7 @@ const char *matrix_operation_name(MatrixOperation operation)
     return "unknown";
 }
 
+/* Returns the fragment shader path. */
 const char *matrix_operation_fragment_shader(MatrixOperation operation)
 {
     switch (operation) {
@@ -35,6 +38,7 @@ const char *matrix_operation_fragment_shader(MatrixOperation operation)
     return NULL;
 }
 
+/* Returns the compute shader path. */
 const char *matrix_operation_compute_shader(MatrixOperation operation)
 {
     switch (operation) {
@@ -46,6 +50,7 @@ const char *matrix_operation_compute_shader(MatrixOperation operation)
     return NULL;
 }
 
+/* Stabilizes division inputs. */
 void matrix_operation_prepare_inputs(MatrixOperation operation, Mat *B)
 {
     if (operation != MATRIX_OP_DIVIDE) return;
@@ -57,6 +62,7 @@ void matrix_operation_prepare_inputs(MatrixOperation operation, Mat *B)
     }
 }
 
+/* Applies an element-wise operation. */
 static void elementwise(MatrixOperation operation,
                         const Mat *A, const Mat *B, Mat *C)
 {
@@ -71,6 +77,7 @@ static void elementwise(MatrixOperation operation,
     }
 }
 
+/* Runs the CPU operation. */
 void matrix_operation_cpu(MatrixOperation operation,
                           const Mat *A, const Mat *B, Mat *C)
 {
@@ -78,6 +85,7 @@ void matrix_operation_cpu(MatrixOperation operation,
     else elementwise(operation, A, B, C);
 }
 
+/* Computes the reference result. */
 void matrix_operation_reference(MatrixOperation operation,
                                 const Mat *A, const Mat *B, Mat *C)
 {
@@ -99,6 +107,7 @@ void matrix_operation_reference(MatrixOperation operation,
     }
 }
 
+/* Calculates operation throughput. */
 double matrix_operation_gflops(MatrixOperation operation, int n, double ms)
 {
     double operations = operation == MATRIX_OP_MULTIPLY

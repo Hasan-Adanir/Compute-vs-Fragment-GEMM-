@@ -15,7 +15,7 @@ const char *matrix_operation_name(MatrixOperation operation);
 const char *matrix_operation_fragment_shader(MatrixOperation operation);
 const char *matrix_operation_compute_shader(MatrixOperation operation);
 
-/* Bolme testinde sifira cok yakin bolenleri guvenli bir esige tasir. */
+/* Stabilizes division inputs. */
 void matrix_operation_prepare_inputs(MatrixOperation operation, Mat *B);
 
 void matrix_operation_cpu(MatrixOperation operation,
@@ -25,10 +25,3 @@ void matrix_operation_reference(MatrixOperation operation,
 double matrix_operation_gflops(MatrixOperation operation, int n, double ms);
 
 #endif
-
-/*Ayrıca şu görevleri yapar:
-- Yazıyla verilen işlem adını enum değerine çevirmek
-- İşleme uygun fragment shader dosyasını seçmek
-- CPU referans hesabını yapmak
-- Bölme için giriş verisini güvenli hâle getirmek
-- İşlem adını yazdırmak */

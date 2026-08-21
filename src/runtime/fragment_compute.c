@@ -1,15 +1,11 @@
-/* mygl.c -- My_gl* API'sinin fragment shader ile gerceklenmesi. Bu dosyadaki
- * her fonksiyon, mygl.h'deki tabloda karsisinda duran compute cagrisinin
- * yaptigi isi GLES 2.0 araclariyla yapar. */
+/* Emulates compute operations with fragment shaders. */
 
 #include "fragment_compute.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 
-/* Tek kanalli float doku GLES 2.0'da yok; RGBA kullanip .r kanalini
- * okuyoruz. Masaustu GL boyutlu internal format ister, GLES 2.0 ise
- * (OES_texture_float ile) internalformat == format olmasini. Tek fark bu. */
+/* Selects a portable float texture format. */
 #ifdef MY_GLES2
 #define MY_TEX_INTERNAL GL_RGBA
 #else
@@ -21,14 +17,10 @@ static GLuint    g_vbo;
 static int       g_local_x = 1;
 static int       g_local_y = 1;
 
-/* ============================================================ baslatma ==*/
-
+/* Initializes the fullscreen triangle. */
 void My_glInit(void)
 {
-    /* Tam ekran ucgen: (-1,-1), (3,-1), (-1,3). Viewport'u tamamen kaplar,
-     * tasan kisim kirpilir; iki ucgenli quad'a gore kose boyunca tekrar eden
-     * fragment olmaz. GLES 2.0'da gl_VertexID olmadigi icin koseler gercek
-     * bir VBO'dan geliyor. */
+    /* Cover the viewport with one triangle. */
     static const GLfloat tri[6] = { -1.0f, -1.0f,  3.0f, -1.0f,  -1.0f, 3.0f };
 
     GLint previous_array_buffer = 0;
@@ -40,14 +32,14 @@ void My_glInit(void)
     glBindBuffer(GL_ARRAY_BUFFER, (GLuint)previous_array_buffer);
 }
 
-/* ======================================================== state kapsami ==*/
-
+/* Restores an OpenGL capability. */
 static void restore_capability(GLenum capability, GLboolean enabled)
 {
     if (enabled) glEnable(capability);
     else glDisable(capability);
 }
 
+/* Captures the current OpenGL state. */
 bool My_glBeginStateScope(MyGLStateSnapshot *state)
 {
     if (!state) return false;
@@ -85,12 +77,12 @@ bool My_glBeginStateScope(MyGLStateSnapshot *state)
     glGetBooleanv(GL_COLOR_WRITEMASK, state->color_mask);
     state->active = true;
 
-    /* Capture dongusu aktif texture unit'i degistirdigi icin, daha fragment
-     * state'i kurulmadan once cagri girisindeki degeri geri koyuyoruz. */
+    /* Restore the active texture unit. */
     glActiveTexture((GLenum)state->active_texture);
     return glGetError() == GL_NO_ERROR;
 }
 
+/* Restores the captured OpenGL state. */
 void My_glEndStateScope(MyGLStateSnapshot *state)
 {
     if (!state || !state->active) return;
@@ -123,8 +115,7 @@ void My_glEndStateScope(MyGLStateSnapshot *state)
     state->active = false;
 }
 
-/* ============================================================== buffer ==*/
-
+/* Creates a texture-backed buffer. */
 MyBuffer My_glCreateBuffer(int w, int h, const float *data)
 {
     MyBuffer b;
@@ -136,8 +127,7 @@ MyBuffer My_glCreateBuffer(int w, int h, const float *data)
     b.h   = h;
     b.fbo = 0;
 
-    /* Doku RGBA oldugu icin veriyi genisletmek gerekiyor: deger .r kanalinda,
-     * digerleri sifir. */
+    /* Store values in the red channel. */
     float *rgba = NULL;
     if (data) {
         rgba = (float *)calloc((size_t)w * (size_t)h * 4, sizeof(float));
@@ -147,7 +137,7 @@ MyBuffer My_glCreateBuffer(int w, int h, const float *data)
 
     glGenTextures(1, &b.tex);
     glBindTexture(GL_TEXTURE_2D, b.tex);
-    /* Filtreleme ve mipmap istemiyoruz: doku burada bir dizi, resim degil. */
+    /* Use exact texel sampling. */
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -157,14 +147,12 @@ MyBuffer My_glCreateBuffer(int w, int h, const float *data)
     free(rgba);
 
     if (!data) {
-        /* Cikti buffer'i. Compute'ta writeonly bir SSBO yeterdi; burada
-         * dokuyu FBO'ya renk eki olarak baglamak gerekiyor, */
+        /* Attach output textures to an FBO. */
         glGenFramebuffers(1, &b.fbo);
         glBindFramebuffer(GL_FRAMEBUFFER, b.fbo);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                                GL_TEXTURE_2D, b.tex, 0);
-        /* GLES 2.0'da glDrawBuffers / glReadBuffer yok: tek renk eki var,
-         * secim yapilacak bir sey de yok. */
+        /* GLES 2.0 uses one color attachment. */
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
             fprintf(stderr, "My_glCreateBuffer: FBO tamamlanamadi "
                             "(float doku hedefi desteklenmiyor olabilir)\n");
@@ -175,6 +163,7 @@ MyBuffer My_glCreateBuffer(int w, int h, const float *data)
 }
 
 
+/* Deletes a texture-backed buffer. */
 void My_glDeleteBuffer(MyBuffer *buf)
 {
     if (buf->fbo) glDeleteFramebuffers(1, &buf->fbo);
@@ -186,47 +175,29 @@ void My_glDeleteBuffer(MyBuffer *buf)
 
 
 
+/* Records a buffer binding. */
 void My_glBindBufferBase(GLuint binding, MyBuffer *buf)
 {
-    /* Baglama noktasi burada sadece not ediliyor; doku birimine bagli hale
-     * gelmesi ve uniform'larinin doldurulmasi dispatch aninda oluyor, cunku
-     * o ana kadar hangi programin kullanildigi belli degil. */
+    /* Apply bindings during dispatch. */
     if (binding < MY_GL_MAX_BINDINGS)
         g_bound[binding] = buf;
 }
 
-/* ============================================================= program ==*/
-
-
-
-
+/* Creates a fragment-based compute program. */
 GLuint My_glCreateComputeProgram(const char *frag_file)
 {
-    /* Numaranin tamami bu satirda: "compute" kernel'i bir fragment shader ve
-     * onu is uretecek bir vertex shader'la linkliyoruz. */
+    /* Link the kernel with a fullscreen vertex shader. */
     return gl_program_graphics("common/fullscreen.vert", frag_file);
 }
 
+/* Sets the emulated local size. */
 void My_glProgramLocalSize(int local_x, int local_y)
 {
     g_local_x = local_x;
     g_local_y = local_y;
 }
 
-/* ============================================================ dispatch ==*/
-
-
-/*
-Compute shader                     Fragment shader taklidi
---------------                     -----------------------
-glDispatchCompute()        →        glDrawArrays()
-work group sayısı          →        viewport boyutu
-gl_GlobalInvocationID.xy   →        gl_FragCoord.xy
-SSBO input                 →        texture input
-SSBO output                →        FBO'ya bağlı texture
-*/
-
-
+/* Dispatches emulated compute work. */
 void My_glDispatchCompute(GLuint num_groups_x, GLuint num_groups_y,
                           GLuint num_groups_z)
 {
@@ -241,11 +212,7 @@ void My_glDispatchCompute(GLuint num_groups_x, GLuint num_groups_y,
 
     glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
 
-    /* Girdi buffer'lari doku birimlerine baglanir. Shader tarafinda binding i
-     * icin uBuf<i> ve uBuf<i>_size uniform'lari bekleniyor; compute'taki
-     * layout(std430, binding = i) buffer bloklarinin karsiligi bu. */
-    /* Runtime'in dogru sonuc uretebilmesi icin gerekli pipeline state'i.
-     * State scope kapandiginda tumu cagri oncesindeki haline geri gelir. */
+    /* Configure a deterministic pipeline state. */
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_BLEND);
     glDisable(GL_CULL_FACE);
@@ -261,7 +228,7 @@ void My_glDispatchCompute(GLuint num_groups_x, GLuint num_groups_y,
         char      name[32];
 
         if (!b) continue;
-        if (b->fbo) { out = b; continue; }   /* cikti; doku birimine gitmez */
+        if (b->fbo) { out = b; continue; } /* Skip output textures. */
 
         glActiveTexture(GL_TEXTURE0 + (GLenum)i);
         glBindTexture(GL_TEXTURE_2D, b->tex);
@@ -280,38 +247,29 @@ void My_glDispatchCompute(GLuint num_groups_x, GLuint num_groups_y,
 
     glBindFramebuffer(GL_FRAMEBUFFER, out->fbo);
 
-    /* Isin dagitimi. Compute'ta num_groups_x * num_groups_y workgroup ve her
-     * birinde local_x * local_y invocation vardi. Burada viewport tam o kadar
-     * piksel aciliyor; rasterizer ayni sayida fragment uretiyor ve
-     * gl_FragCoord.xy dogrudan gl_GlobalInvocationID.xy oluyor.
-     *
-     * N, local_size'in kati degilse viewport hedeften buyuk kalir. Tasan
-     * fragment'lari shader'daki sinir kontrolu (discard) eler -- compute'taki
-     * "return" ile ayni is. */
+    /* Map invocations to viewport pixels. */
     glViewport(0, 0,
                (GLsizei)(num_groups_x * (GLuint)g_local_x),
                (GLsizei)(num_groups_y * (GLuint)g_local_y));
 
-    glDrawArrays(GL_TRIANGLES, 0, 3);   /* glDispatchCompute'un karsiligi */
+    glDrawArrays(GL_TRIANGLES, 0, 3); /* Emulate compute dispatch. */
 }
 
 
 
 
+/* Waits for fragment writes. */
 void My_glMemoryBarrier(GLbitfield barriers)
 {
-    /* GLES 2.0'da glMemoryBarrier yok ve gerekmiyor: fragment yazmalari
-     * pipeline sirasina uyar. Geri okumadan once isin bittiginden emin olmak
-     * icin glFinish yeterli. */
+    /* Finish before reading results. */
     (void)barriers;
     glFinish();
 }
 
+/* Reads values from a buffer. */
 void My_glGetBufferSubData(MyBuffer *buf, float *dst)
 {
-    /* Veri buffer'da degil dokuda; okuma yolu da glGetBufferSubData degil
-     * glReadPixels. GLES 2.0'da tek kanalli okuma yok, RGBA okuyup .r
-     * kanalini ayikliyoruz. */
+    /* Read RGBA data and extract red values. */
     GLint previous_framebuffer = 0;
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_framebuffer);
 

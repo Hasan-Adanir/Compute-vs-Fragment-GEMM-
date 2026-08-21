@@ -1,48 +1,19 @@
-/* ===========================================================================
- * mygl -- compute shader API'sinin GLES 2.0 fragment shader ile taklidi.
- *
- * comp.c'deki her compute'a ozgu cagrinin burada bir My_ karsiligi var:
- *
- *   glGenBuffers + glBufferData    ->  My_glCreateBuffer
- *   glBindBufferBase               ->  My_glBindBufferBase
- *   gl_program_compute             ->  My_glCreateComputeProgram
- *   layout(local_size_x = ...)     ->  My_glProgramLocalSize
- *   glDispatchCompute              ->  My_glDispatchCompute
- *   glMemoryBarrier                ->  My_glMemoryBarrier
- *   glGetBufferSubData             ->  My_glGetBufferSubData
- *
- * glUseProgram / glUniform / glGetUniformLocation GLES 2.0'da da aynen var,
- * o yuzden sarmalanmadi: comp.c ile frag.c'de ayni satir olarak duruyorlar.
- *
- * GLES 2.0'in dayattiklari:
- *   VAO yok          -> tek bir VBO, vertex attribute durumu global
- *   gl_VertexID yok  -> ucgenin koseleri VBO'dan attribute olarak geliyor
- *   SSBO yok         -> her buffer bir float doku; 1B indis 2B texel'e cevrilir
- *   texelFetch yok   -> normalize koordinat, (x + 0.5) / genislik
- *
- * Yapisal sinirlar (compute'un yapip fragment'in yapamadigi seyler):
- *   - scatter yok: fragment yalnizca kendi texel'ine yazar, yani sadece
- *     "cikti indisi = invocation indisi" olan kernel'ler taklit edilebilir
- *   - shared bellek, barrier(), atomik islem yok
- *   - num_groups_z 1 olmak zorunda (katmanli render yok)
- * ===========================================================================*/
+/* Emulates compute operations with GLES 2.0 fragment shaders. */
 #ifndef FRAGMENT_COMPUTE_H
 #define FRAGMENT_COMPUTE_H
 
 #include "platform_support.h"
 
-/* SSBO'nun karsiligi. Veri dokuda durur; cikti buffer'i ayrica bir FBO'ya
- * renk eki olarak baglanir, cunku fragment shader ancak oraya yazabilir. */
+/* Stores buffer data in a texture. */
 typedef struct {
     GLuint tex;
-    GLuint fbo;   /* 0 ise girdi buffer'i */
+    GLuint fbo; /* Zero for input buffers. */
     int    w, h;
 } MyBuffer;
 
 #define MY_GL_MAX_BINDINGS 8
 
-/* Fragment-compute islemi boyunca korunacak OpenGL context state'i.
- * Bu yapiyi dogrudan degistirmek yerine Begin/End fonksiyonlari kullanilir. */
+/* Stores OpenGL state for restoration. */
 typedef struct {
     GLint program;
     GLint framebuffer;
@@ -68,41 +39,34 @@ typedef struct {
     bool active;
 } MyGLStateSnapshot;
 
-/* Fragment islemi icin bir state kapsami acar/kapatir. End cagrisi, hata
- * durumlari dahil olmak uzere, Begin oncesindeki state'i geri yukler. */
+/* Captures and restores OpenGL state. */
 bool My_glBeginStateScope(MyGLStateSnapshot *snapshot);
 void My_glEndStateScope(MyGLStateSnapshot *snapshot);
 
-/* Tam ekran ucgenin VBO'sunu kurar. Bir kez cagrilir. */
+/* Initializes the fullscreen triangle. */
 void My_glInit(void);
 
-/* glGenBuffers + glBufferData karsiligi.
- * data NULL ise cikti buffer'i olur (writeonly buffer'in karsiligi). */
+/* Creates or deletes a buffer. */
 MyBuffer My_glCreateBuffer(int w, int h, const float *data);
 void     My_glDeleteBuffer(MyBuffer *buf);
 
-/* glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, buf) karsiligi.
- * Girdilerde binding = doku birimi, ciktida = render hedefi. */
+/* Records a buffer binding. */
 void My_glBindBufferBase(GLuint binding, MyBuffer *buf);
 
-/* gl_program_compute karsiligi: kernel'i tam ekran ucgen vertex shader'iyla
- * linkler. */
+/* Creates a fragment-based compute program. */
 GLuint My_glCreateComputeProgram(const char *frag_file);
 
-/* Shader'daki layout(local_size_x, local_size_y) karsiligi. Fragment yolunda
- * bu bilgi shader'da degil burada durur: viewport'un boyunu belirler. */
+/* Sets the emulated local size. */
 void My_glProgramLocalSize(int local_x, int local_y);
 
-/* glDispatchCompute karsiligi: gx*local_x, gy*local_y boyunda bir viewport
- * acip tam ekran ucgeni cizer. Rasterizer o kadar fragment uretir. */
+/* Dispatches emulated compute work. */
 void My_glDispatchCompute(GLuint num_groups_x, GLuint num_groups_y,
                           GLuint num_groups_z);
 
-/* glMemoryBarrier karsiligi. */
+/* Waits for fragment writes. */
 void My_glMemoryBarrier(GLbitfield barriers);
 
-/* glGetBufferSubData karsiligi: FBO'dan glReadPixels ile geri okur.
- * dst en az buf->w * buf->h float tutacak kadar buyuk olmali. */
+/* Reads buffer values. */
 void My_glGetBufferSubData(MyBuffer *buf, float *dst);
 
 #endif /* FRAGMENT_COMPUTE_H */

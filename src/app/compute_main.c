@@ -1,5 +1,4 @@
-/* Compute shader matris cekirdeklerini calistiran ve surelerini raporlayan
- * uygulama. Fragment uygulamasiyla ayni islem ve raporlama modelini kullanir. */
+/* Runs compute-shader matrix benchmarks. */
 
 #include "platform_support.h"
 #include "matrix_operation.h"
@@ -14,6 +13,7 @@ typedef struct {
     double gpu_ms;
 } OperationResult;
 
+/* Uploads data to an SSBO. */
 static GLuint upload_ssbo(GLuint binding, const float *data, size_t bytes)
 {
     GLuint buffer;
@@ -24,6 +24,7 @@ static GLuint upload_ssbo(GLuint binding, const float *data, size_t bytes)
     return buffer;
 }
 
+/* Benchmarks one compute operation. */
 static bool run_operation(MatrixOperation operation, int n, bool verify,
                           bool show, const Mat *A, const Mat *B, Mat *C_gpu,
                           GLuint output_buffer, size_t bytes, GLuint groups,
@@ -80,6 +81,7 @@ static bool run_operation(MatrixOperation operation, int n, bool verify,
     return valid;
 }
 
+/* Prints benchmark results. */
 static void print_summary(const OperationResult *results, int count)
 {
     double total_cpu_ms = 0.0;
@@ -100,6 +102,7 @@ static void print_summary(const OperationResult *results, int count)
            "buffer yukleme ve geri okuma bu sureye dahil degildir.\n");
 }
 
+/* Runs compute-shader benchmarks. */
 int main(int argc, char **argv)
 {
     int n = 512;
