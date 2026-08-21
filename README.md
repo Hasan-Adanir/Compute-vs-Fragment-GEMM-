@@ -1,5 +1,41 @@
 # Compute Shader'ın Fragment Shader ile Taklidi (GPGPU)
 
+## Kütüphane arayüzü
+
+Uygulama kodu yalnızca [matrix_library.h](include/matrix_library.h) dosyasını
+dahil eder. Dört işlem doğrudan kullanılabilir:
+
+```c
+bool matrix_multiply(const Matrix *a, const Matrix *b, Matrix *result);
+bool matrix_add(const Matrix *a, const Matrix *b, Matrix *result);
+bool matrix_subtract(const Matrix *a, const Matrix *b, Matrix *result);
+bool matrix_divide(const Matrix *a, const Matrix *b, Matrix *result);
+```
+
+Kullanıcı giriş verisinin sahibidir. Kütüphane başarılı işlemde sonuç verisini
+ayırır; bu veri `matrix_release` ile bırakılmalıdır. `result` ilk çağrıdan önce
+`{0}` ile başlatılmalıdır. Toplama, çıkarma ve bölme eşit boyutlu matris ister.
+Çarpma için `a.cols == b.rows` olmalıdır. Bölme eleman bazlıdır ve sıfıra bölme
+değerleri değiştirilmeden GPU'ya gönderilir.
+
+```c
+float a_data[] = {1, 2, 3, 4};
+float b_data[] = {5, 6, 7, 8};
+
+Matrix a = {2, 2, a_data};
+Matrix b = {2, 2, b_data};
+Matrix result = {0};
+
+if (matrix_multiply(&a, &b, &result)) {
+    /* Uses result.data. */
+    matrix_release(&result);
+}
+matrix_library_shutdown();
+```
+
+`matrix_gpu` CMake hedefi statik kütüphanedir. `matrix_library_example` hedefi
+ise örnek kullanıcı programıdır.
+
 Bu proje aynı matris çarpımını (`C = A × B`) iki farklı yolla hesaplar:
 
 1. **Compute shader** ile — GPU'da genel amaçlı hesap için normal yol.

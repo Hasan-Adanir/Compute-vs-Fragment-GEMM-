@@ -68,6 +68,29 @@ function(add_variant name main_source)
     endif()
 endfunction()
 
+add_library(matrix_gpu STATIC
+    src/library/matrix_library.c
+    src/platform/platform_support.c
+    src/runtime/fragment_compute.c
+    src/operations/matrix_operation.c)
+target_include_directories(matrix_gpu
+    PUBLIC include
+    PRIVATE src/platform src/runtime src/operations)
+target_link_libraries(matrix_gpu PUBLIC glad glfw)
+target_compile_definitions(matrix_gpu PRIVATE
+    MM_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
+if(APPLE)
+    target_link_libraries(matrix_gpu PUBLIC "-framework OpenGL")
+elseif(UNIX)
+    target_link_libraries(matrix_gpu PUBLIC OpenGL::GL m dl pthread)
+elseif(WIN32)
+    target_link_libraries(matrix_gpu PUBLIC opengl32)
+endif()
+
+add_executable(matrix_library_example examples/library_example.c)
+target_link_libraries(matrix_library_example PRIVATE matrix_gpu)
+
 add_variant(fragment_main src/app/fragment_main.c
     src/runtime/fragment_compute.c
     src/operations/matrix_operation.c)
@@ -76,4 +99,3 @@ add_variant(fragment_matrix_cli src/app/fragment_matrix_cli.c
     src/operations/matrix_operation.c)
 add_variant(compute_main src/app/compute_main.c
     src/operations/matrix_operation.c)
-
