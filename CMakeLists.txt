@@ -77,6 +77,9 @@ endfunction()
 add_variant(fragment_main src/app/fragment_main.c
     src/runtime/fragment_compute.c
     src/operations/matrix_operation.c)
+add_variant(fragment_matrix_cli src/app/fragment_matrix_cli.c
+    src/runtime/fragment_compute.c
+    src/operations/matrix_operation.c)
 add_variant(compute_main src/app/compute_main.c
     src/operations/matrix_operation.c)
 
